@@ -146,10 +146,24 @@ def main():
     for i, name in enumerate(robot.joint_names):
         print(f"  {name}: {i}")
 
-    base_joint_indices = [8, 9, 6]
-    arm_joint_indices = [2, 0, 1, 3, 4, 5, 7]
+    arm_joint_indices = [2, 0, 1, 3, 4, 5, 6]
 
-    NUM_JOINTS = 10
+    arm_action = JointPositionActionCfg(
+        joint_names=[
+            "panda_joint1",
+            "panda_joint2",
+            "panda_joint3",
+            "panda_joint4",
+            "panda_joint5",
+            "panda_joint6",
+            "panda_joint7",
+        ],
+        asset_name="robot",
+        scale=1.0,
+    )
+    arm_controller = arm_action.class_type(arm_action, env)
+
+    NUM_JOINTS = 7
     ALL_ENV_INDICES = torch.arange(scene.num_envs, dtype=torch.long, device="cuda:0")
 
     root_physx_view = scene._articulations["robot"].root_physx_view
@@ -158,6 +172,9 @@ def main():
     # Simulate
     step_count = 0
     while sim.app.is_running():
+
+        arm_controller.apply_actions()
+
         # Set the base position via root transform
         target_base_x = 0.5 * math.cos(step_count / 60.0)
         target_base_y = 0.2 * math.sin(step_count / 60.0)
@@ -177,9 +194,9 @@ def main():
 
         joint_pos = root_physx_view.get_dof_positions()
         joint_vel = root_physx_view.get_dof_velocities()
-        print(
-            f"Base XYZ pos: {joint_pos[:, base_joint_indices]} \t vel: {joint_vel[:, base_joint_indices]}"
-        )
+        # print(
+        #     f"Base XYZ pos: {joint_pos[:, base_joint_indices]} \t vel: {joint_vel[:, base_joint_indices]}"
+        # )
 
         time.sleep(1 / 120.0)
         step_count += 1
