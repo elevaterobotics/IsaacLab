@@ -20,7 +20,7 @@ simulation_app = app_launcher.app
 
 import isaaclab.sim as sim_utils
 import torch
-from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.actuators import IdealPDActuatorCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs.mdp.actions.actions_cfg import (
     JointPositionActionCfg,
@@ -66,25 +66,25 @@ class SimpleSceneCfg(InteractiveSceneCfg):
             joint_vel={".*": 0.0},
         ),
         actuators={
-            #"base": ImplicitActuatorCfg(
+            #"base": IdealPDActuatorCfg(
             #    joint_names_expr=["dummy_base_.*"],
             #    velocity_limit=100.0,
             #    effort_limit=1000.0,
             #    stiffness=1e7,
             #    damping=1e5,
             #),
-            "panda_shoulder": ImplicitActuatorCfg(
+            "panda_shoulder": IdealPDActuatorCfg(
                 joint_names_expr=["panda_joint[1-4]"],
                 effort_limit=87.0,
                 velocity_limit=100.0,
-                stiffness=800.0,
+                stiffness=1e6,
                 damping=40.0,
             ),
-            "panda_forearm": ImplicitActuatorCfg(
+            "panda_forearm": IdealPDActuatorCfg(
                 joint_names_expr=["panda_joint[5-7]"],
                 effort_limit=12.0,
                 velocity_limit=100.0,
-                stiffness=800.0,
+                stiffness=1e6,
                 damping=40.0,
             ),
         },
@@ -194,7 +194,7 @@ def main():
         # )
         #root_physx_view.set_dof_position_targets(joint_pos_target, torch.arange(len(arm_joint_indices), dtype=torch.int32, device="cuda:0"))
         arm_move_command = torch.tensor(
-            [[0.0, -0.569, 0.0, -2.81, 0.0, 2.0, 0.741]], device="cuda:0"
+            [[1.0 * math.sin(step_count * 2 * math.pi * 0.1), -0.569, 0.0, -2.81, 0.0, 2.0, 0.741]], device="cuda:0"
         )
         arm_controller.process_actions(arm_move_command)
         arm_controller.apply_actions()
@@ -203,9 +203,9 @@ def main():
 
         joint_pos = root_physx_view.get_dof_positions()
         joint_vel = root_physx_view.get_dof_velocities()
-        # print(
-        #     f"Base XYZ pos: {joint_pos[:, base_joint_indices]} \t vel: {joint_vel[:, base_joint_indices]}"
-        # )
+        print(
+            f"Joint pos: {joint_pos[:, arm_joint_indices]}"
+        )
 
         time.sleep(LOOP_PERIOD)
         step_count += 1
