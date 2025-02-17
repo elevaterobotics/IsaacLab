@@ -162,6 +162,9 @@ def main():
         scale=1.0,
     )
     arm_controller = arm_action.class_type(arm_action, env)
+    arm_move_command = torch.tensor(
+        [[0.569, 0.0, 0.0, 2.8, 0.0, 0.0, 0.0]], device="cuda:0"
+    )
 
     NUM_JOINTS = 7
     ALL_ENV_INDICES = torch.arange(scene.num_envs, dtype=torch.long, device="cuda:0")
@@ -172,7 +175,8 @@ def main():
     # Simulate
     step_count = 0
     while sim.app.is_running():
-
+        # Forward velocity commands
+        arm_controller.process_actions(arm_move_command)
         arm_controller.apply_actions()
 
         # Set the base position via root transform
