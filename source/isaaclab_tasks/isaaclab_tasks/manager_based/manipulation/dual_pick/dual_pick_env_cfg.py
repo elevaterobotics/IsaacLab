@@ -25,6 +25,26 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 
+# TODO
+# [ ] Re-create successful dual pick with minimal changes:
+#   [ ] new reward terms weighted to zero
+#   [ ] new boxes far from target box
+#   [ ] observations for new boxes (should be ignored by policy)
+# [ ] Add boxes back in, abserve behavior of trained policy, make plan
+# [ ] Hyper parameter tuning to get faster learning
+# [ ] Add randomization:
+#   [ ] box positions
+#   [ ] box sizes
+#   [ ] box masses
+# [ ] More realistic environment:
+#   [ ] Non-rigid boxes
+#   [ ] Boxes on pallet on foor
+#   [ ] More realistic / complex box arrangements
+# [ ] Better robot
+#   [ ] Mobile base
+#   [ ] Paddle grippers
+#   [ ] Vaccum grippers
+#   [ ] Shoulder lift and rotate joints that move both arms
 
 @configclass
 class DualPickSceneCfg(InteractiveSceneCfg):
