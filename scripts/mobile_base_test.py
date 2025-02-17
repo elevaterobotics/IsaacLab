@@ -54,10 +54,6 @@ class SimpleSceneCfg(InteractiveSceneCfg):
         ),
         init_state=ArticulationCfg.InitialStateCfg(
             joint_pos={
-                # Base joints
-                "dummy_base_prismatic_y_joint": 0.0,
-                "dummy_base_prismatic_x_joint": 0.0,
-                "dummy_base_revolute_z_joint": 0.0,
                 # Arm joints at home position
                 "panda_joint1": 0.0,
                 "panda_joint2": -0.569,
@@ -146,7 +142,7 @@ def main():
     for i, name in enumerate(robot.joint_names):
         print(f"  {name}: {i}")
 
-    arm_joint_indices = [2, 0, 1, 3, 4, 5, 6]
+    arm_joint_indices = [0, 1, 2, 3, 4, 5, 6]
 
     arm_action = JointPositionActionCfg(
         joint_names=[
@@ -163,7 +159,7 @@ def main():
     )
     arm_controller = arm_action.class_type(arm_action, env)
     arm_move_command = torch.tensor(
-        [[0.569, 0.0, 0.0, 2.8, 0.0, 0.0, 0.0]], device="cuda:0"
+        [[0.0, -0.569, 0.0, -2.81, 0.0, 2.0, 0.741]], device="cuda:0"
     )
 
     NUM_JOINTS = 7
@@ -174,25 +170,34 @@ def main():
 
     # Simulate
     step_count = 0
+    LOOP_PERIOD = 1 / 120.0
     while sim.app.is_running():
-        # Forward velocity commands
-        arm_controller.process_actions(arm_move_command)
-        arm_controller.apply_actions()
 
-        # Set the base position via root transform
-        target_base_x = 0.5 * math.cos(step_count / 60.0)
-        target_base_y = 0.2 * math.sin(step_count / 60.0)
-        base_pose = root_physx_view.get_root_transforms()
-        base_pose[:, 0] = target_base_x
-        base_pose[:, 1] = target_base_y
-        indices = torch.arange(base_pose.shape[0], dtype=torch.int32, device="cuda")
-        root_physx_view.set_root_transforms(base_pose, indices=indices)
+#        # Set the base position via root transform
+#        target_base_x = 0.5 * math.cos(step_count / 60.0)
+#        target_base_y = 0.2 * math.sin(step_count / 60.0)
+#        base_pose = root_physx_view.get_root_transforms()
+#        base_pose[:, 0] = target_base_x
+#        base_pose[:, 1] = target_base_y
+#        indices = torch.arange(base_pose.shape[0], dtype=torch.int32, device="cuda:0")
+#        root_physx_view.set_root_transforms(base_pose, indices=indices)
 
         # Sinusoidal actuation of one arm joint
-        joint_pos_target[0, arm_joint_indices] = torch.tensor(
-            [[0.0, 0.0, math.cos(step_count / 60.0), 0.0, 0.0, 2.0, 0.74]], device="cuda:0"
+        # joint_pos_target[0, arm_joint_indices] = torch.tensor(
+        #     [[5.0 * math.cos(step_count * 2 * math.pi),
+        #         0.0,
+        #         0.0,
+        #         0.0,
+        #         0.0,
+        #         2.0,
+        #         0.74]], device="cuda:0"
+        # )
+        #root_physx_view.set_dof_position_targets(joint_pos_target, torch.arange(len(arm_joint_indices), dtype=torch.int32, device="cuda:0"))
+        arm_move_command = torch.tensor(
+            [[0.0, -0.569, 0.0, -2.81, 0.0, 2.0, 0.741]], device="cuda:0"
         )
-        root_physx_view.set_dof_position_targets(joint_pos_target, torch.arange(len(arm_joint_indices), dtype=torch.int32, device="cuda"))
+        arm_controller.process_actions(arm_move_command)
+        arm_controller.apply_actions()
 
         sim.step(render=True)
 
@@ -202,7 +207,7 @@ def main():
         #     f"Base XYZ pos: {joint_pos[:, base_joint_indices]} \t vel: {joint_vel[:, base_joint_indices]}"
         # )
 
-        time.sleep(1 / 120.0)
+        time.sleep(LOOP_PERIOD)
         step_count += 1
 
 
