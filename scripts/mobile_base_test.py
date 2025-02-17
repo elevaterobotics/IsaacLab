@@ -2,6 +2,7 @@
 
 import argparse
 import math
+import numpy as np
 import time
 
 from isaaclab.app import AppLauncher
@@ -19,7 +20,7 @@ simulation_app = app_launcher.app
 
 import isaaclab.sim as sim_utils
 import torch
-from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.actuators import IdealPDActuatorCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs.mdp.actions.actions_cfg import (
     JointPositionActionCfg,
@@ -46,17 +47,13 @@ class SimpleSceneCfg(InteractiveSceneCfg):
     robot = ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/ridgeback_franka",
         spawn=sim_utils.UsdFileCfg(
-            usd_path="C:\\Users\\duhad\\elevate\\cratos\\usd\\ridgeback_panda.usd",
+            usd_path=f"/home/apptronik/workspaces/isaac_ros-dev/src/cratos/usd/customized_panda.usd",
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
                 enabled_self_collisions=False
             ),
         ),
         init_state=ArticulationCfg.InitialStateCfg(
             joint_pos={
-                # Base joints
-                "dummy_base_prismatic_y_joint": 0.0,
-                "dummy_base_prismatic_x_joint": 0.0,
-                "dummy_base_revolute_z_joint": 0.0,
                 # Arm joints at home position
                 "panda_joint1": 0.0,
                 "panda_joint2": -0.569,
@@ -69,33 +66,26 @@ class SimpleSceneCfg(InteractiveSceneCfg):
             joint_vel={".*": 0.0},
         ),
         actuators={
-            "base": ImplicitActuatorCfg(
-                joint_names_expr=["dummy_base_.*"],
-                velocity_limit=100.0,
-                effort_limit=1000.0,
-                stiffness=1e7,
-                damping=1e5,
-            ),
-            "panda_shoulder": ImplicitActuatorCfg(
+            #"base": IdealPDActuatorCfg(
+            #    joint_names_expr=["dummy_base_.*"],
+            #    velocity_limit=100.0,
+            #    effort_limit=1000.0,
+            #    stiffness=1e7,
+            #    damping=1e5,
+            #),
+            "panda_shoulder": IdealPDActuatorCfg(
                 joint_names_expr=["panda_joint[1-4]"],
                 effort_limit=87.0,
                 velocity_limit=100.0,
-                stiffness=800.0,
+                stiffness=1e6,
                 damping=40.0,
             ),
-            "panda_forearm": ImplicitActuatorCfg(
+            "panda_forearm": IdealPDActuatorCfg(
                 joint_names_expr=["panda_joint[5-7]"],
                 effort_limit=12.0,
                 velocity_limit=100.0,
-                stiffness=800.0,
+                stiffness=1e6,
                 damping=40.0,
-            ),
-            "panda_hand": ImplicitActuatorCfg(
-                joint_names_expr=["panda_finger_joint.*"],
-                effort_limit=200.0,
-                velocity_limit=0.2,
-                stiffness=1e5,
-                damping=1e3,
             ),
         },
     )
@@ -152,9 +142,7 @@ def main():
     for i, name in enumerate(robot.joint_names):
         print(f"  {name}: {i}")
 
-    base_joint_indices = [8, 9, 6]
-    arm_joint_indices = [2, 0, 1, 3, 4, 5, 7]
-    finger_joint_indices = [10, 11]
+    arm_joint_indices = [0, 1, 2, 3, 4, 5, 6]
 
     arm_action = JointPositionActionCfg(
         joint_names=[
@@ -169,63 +157,58 @@ def main():
         asset_name="robot",
         scale=1.0,
     )
-    base_action = JointPositionActionCfg(
-        joint_names=[
-            "dummy_base_prismatic_x_joint",
-            "dummy_base_prismatic_y_joint",
-            "dummy_base_revolute_z_joint",
-        ],
-        asset_name="robot",
-        scale=1.0,
-    )
-
-    # Initialize base action controller with environment wrapper
-    base_controller = base_action.class_type(base_action, env)
     arm_controller = arm_action.class_type(arm_action, env)
-
     arm_move_command = torch.tensor(
-        [[0.569, 0.0, 0.0, 2.8, 0.0, 0.0, 0.0]], device="cuda:0"
+        [[0.0, -0.569, 0.0, -2.81, 0.0, 2.0, 0.741]], device="cuda:0"
     )
-    base_move_command = torch.tensor([[0.5, 0.2, 0.2]], device="cuda:0")
 
-    NUM_JOINTS = 12
+    NUM_JOINTS = 7
     ALL_ENV_INDICES = torch.arange(scene.num_envs, dtype=torch.long, device="cuda:0")
 
     root_physx_view = scene._articulations["robot"].root_physx_view
     joint_pos_target = torch.zeros((1, NUM_JOINTS), device="cuda:0")
-    joint_pos_target[:, arm_joint_indices] = torch.tensor(
-        [[0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.74]], device="cuda:0"
-    )
 
     # Simulate
     step_count = 0
+    LOOP_PERIOD = 1 / 120.0
     while sim.app.is_running():
-        # Process and apply forward velocity command
-        base_controller.process_actions(base_move_command)
-        base_controller.apply_actions()
 
+#        # Set the base position via root transform
+#        target_base_x = 0.5 * math.cos(step_count / 60.0)
+#        target_base_y = 0.2 * math.sin(step_count / 60.0)
+#        base_pose = root_physx_view.get_root_transforms()
+#        base_pose[:, 0] = target_base_x
+#        base_pose[:, 1] = target_base_y
+#        indices = torch.arange(base_pose.shape[0], dtype=torch.int32, device="cuda:0")
+#        root_physx_view.set_root_transforms(base_pose, indices=indices)
+
+        # Sinusoidal actuation of one arm joint
+        # joint_pos_target[0, arm_joint_indices] = torch.tensor(
+        #     [[5.0 * math.cos(step_count * 2 * math.pi),
+        #         0.0,
+        #         0.0,
+        #         0.0,
+        #         0.0,
+        #         2.0,
+        #         0.74]], device="cuda:0"
+        # )
+        #root_physx_view.set_dof_position_targets(joint_pos_target, torch.arange(len(arm_joint_indices), dtype=torch.int32, device="cuda:0"))
+        arm_move_command = torch.tensor(
+            [[1.0 * math.sin(step_count * 2 * math.pi * 0.1), -0.569, 0.0, -2.81, 0.0, 2.0, 0.741]], device="cuda:0"
+        )
         arm_controller.process_actions(arm_move_command)
         arm_controller.apply_actions()
-
-        # scene.write_data_to_sim()
-
-        step_count += 1
-        joint_pos_target[0, 2] = math.cos(step_count / 120.0)
-        joint_pos_target[0, 6] = math.sin(step_count / 120.0)
-        joint_pos_target[0, 8] = math.cos(step_count / 120.0)
-        joint_pos_target[0, 9] = math.cos(step_count / 120.0)
-
-        root_physx_view.set_dof_position_targets(joint_pos_target, ALL_ENV_INDICES)
 
         sim.step(render=True)
 
         joint_pos = root_physx_view.get_dof_positions()
         joint_vel = root_physx_view.get_dof_velocities()
         print(
-            f"Base XYZ pos: {joint_pos[:, base_joint_indices]} \t vel: {joint_vel[:, base_joint_indices]}"
+            f"Joint pos: {joint_pos[:, arm_joint_indices]}"
         )
 
-        time.sleep(1 / 120.0)
+        time.sleep(LOOP_PERIOD)
+        step_count += 1
 
 
 if __name__ == "__main__":
