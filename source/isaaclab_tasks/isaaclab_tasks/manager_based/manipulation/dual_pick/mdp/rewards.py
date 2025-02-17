@@ -268,3 +268,91 @@ def box_height_threshold(
     box: RigidObject = env.scene[box_name]
     box_height = box.data.root_state_w[:, 2]  # z-coordinate
     return box_height < min_height
+
+
+def box_spacing(
+    env: ManagerBasedRLEnv,
+    box1_name: str,
+    box2_name: str,
+    box_size: tuple[float, float, float],  # (x, y, z) dimensions of boxes
+    max_gap: float = 0.05,  # Maximum gap to reward
+) -> torch.Tensor:
+    """Reward for maintaining a gap between two boxes based on corner distances.
+
+    Computes distances between all corners of both boxes and takes the 3rd smallest gap.
+    This allows two corners to be coincident (as might happen when boxes touch at their
+    back edges) while still ensuring overall box separation.
+
+    Args:
+        env: The environment instance
+        box1_name: Name of first box
+        box2_name: Name of second box
+        box_size: Box dimensions (x, y, z) in meters
+        max_gap: Maximum gap to reward
+
+    Returns:
+        Reward based on the 3rd smallest corner-to-corner distance, capped at max_gap
+    """
+    # Get box positions
+    box1: RigidObject = env.scene[box1_name]
+    box2: RigidObject = env.scene[box2_name]
+
+    # Get box positions and orientations
+    box1_pos = box1.data.root_state_w[:, :3]
+    box1_quat = box1.data.root_state_w[:, 3:7]
+    box2_pos = box2.data.root_state_w[:, :3]
+    box2_quat = box2.data.root_state_w[:, 3:7]
+
+    # Compute all corner offsets from center
+    half_sizes = torch.tensor(
+        [box_size[0] / 2, box_size[1] / 2, box_size[2] / 2], device=env.device
+    )
+
+    # Generate all 8 corners using combinations of half-sizes
+    corner_offsets = torch.stack(
+        [
+            torch.tensor([x, y, z], device=env.device)
+            for x in [-half_sizes[0], half_sizes[0]]
+            for y in [-half_sizes[1], half_sizes[1]]
+            for z in [-half_sizes[2], half_sizes[2]]
+        ]
+    )
+
+    # Expand corner offsets for all environments [8, 3] -> [num_envs, 8, 3]
+    corner_offsets = corner_offsets.expand(env.num_envs, -1, -1)
+
+    # Transform corners to world frame for both boxes
+    box1_corners = []
+    box2_corners = []
+    for i in range(8):
+        # Get corners for box1
+        corner1, _ = combine_frame_transforms(box1_pos, box1_quat, corner_offsets[:, i])
+        box1_corners.append(corner1)
+
+        # Get corners for box2
+        corner2, _ = combine_frame_transforms(box2_pos, box2_quat, corner_offsets[:, i])
+        box2_corners.append(corner2)
+
+    # Stack corners into tensors [num_envs, 8, 3]
+    box1_corners = torch.stack(box1_corners, dim=1)
+    box2_corners = torch.stack(box2_corners, dim=1)
+
+    # Calculate distances between all pairs of corners
+    # [num_envs, 8, 1, 3] - [num_envs, 1, 8, 3] -> [num_envs, 8, 8, 3]
+    corner_diffs = box1_corners.unsqueeze(2) - box2_corners.unsqueeze(1)
+    corner_distances = torch.norm(corner_diffs, dim=-1)  # [num_envs, 8, 8]
+
+    # Flatten the corner distances for each environment
+    flat_distances = corner_distances.reshape(
+        corner_distances.shape[0], -1
+    )  # [num_envs, 64]
+
+    # Sort distances and take the 3rd smallest value
+    # (allowing 2 corners to be coincident)
+    sorted_distances, _ = torch.sort(flat_distances, dim=-1)
+    third_smallest_gap = sorted_distances[:, 2]  # index 2 gives 3rd smallest
+
+    # Reward is proportional to gap up to max_gap
+    reward = torch.clamp(third_smallest_gap, 0.0, max_gap) / max_gap
+
+    return reward

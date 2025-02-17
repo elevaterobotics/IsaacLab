@@ -48,10 +48,48 @@ class DualPickSceneCfg(InteractiveSceneCfg):
     )
 
     # Box to pick
-    box = RigidObjectCfg(
-        prim_path="{ENV_REGEX_NS}/Object",
+    target_box = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/TargetBox",
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=[0.5, 0, 0.087], rot=[1, 0, 0, 0]
+        ),
+        spawn=UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
+            scale=(3.0, 3.0, 3.0),
+            rigid_props=RigidBodyPropertiesCfg(
+                solver_position_iteration_count=16,
+                solver_velocity_iteration_count=1,
+                max_angular_velocity=1000.0,
+                max_linear_velocity=1000.0,
+                max_depenetration_velocity=5.0,
+                disable_gravity=False,
+            ),
+        ),
+    )
+
+    left_box = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/LeftBox",
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=[0.5, 0.175, 0.087], rot=[1, 0, 0, 0]
+        ),
+        spawn=UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
+            scale=(3.0, 3.0, 3.0),
+            rigid_props=RigidBodyPropertiesCfg(
+                solver_position_iteration_count=16,
+                solver_velocity_iteration_count=1,
+                max_angular_velocity=1000.0,
+                max_linear_velocity=1000.0,
+                max_depenetration_velocity=5.0,
+                disable_gravity=False,
+            ),
+        ),
+    )
+
+    right_box = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/RightBox",
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=[0.5, -0.175, 0.087], rot=[1, 0, 0, 0]
         ),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
@@ -123,9 +161,19 @@ class ObservationsCfg:
         )
 
         # Box pose observation
-        box_pose = ObsTerm(
+        target_box_pose = ObsTerm(
             func=mdp.object_pose,
-            params={"object_name": "box"},
+            params={"object_name": "target_box"},
+            noise=Unoise(n_min=-0.01, n_max=0.01),
+        )
+        left_box_pose = ObsTerm(
+            func=mdp.object_pose,
+            params={"object_name": "left_box"},
+            noise=Unoise(n_min=-0.01, n_max=0.01),
+        )
+        right_box_pose = ObsTerm(
+            func=mdp.object_pose,
+            params={"object_name": "right_box"},
             noise=Unoise(n_min=-0.01, n_max=0.01),
         )
 
@@ -145,19 +193,19 @@ class RewardsCfg:
     # Task rewards using dynamic waypoints
     left_gripper_to_waypoint = RewTerm(
         func=mdp.gripper_to_dynamic_waypoint,
-        weight=-0.2,
+        weight=-20.0,
         params={
             "robot_cfg": SceneEntityCfg("robot_left", body_names=["panda_hand"]),
-            "box_name": "box",
+            "box_name": "target_box",
             "is_left_arm": True,
         },
     )
     right_gripper_to_waypoint = RewTerm(
         func=mdp.gripper_to_dynamic_waypoint,
-        weight=-0.2,
+        weight=-20.0,
         params={
             "robot_cfg": SceneEntityCfg("robot_right", body_names=["panda_hand"]),
-            "box_name": "box",
+            "box_name": "target_box",
             "is_left_arm": False,
         },
     )
@@ -167,14 +215,60 @@ class RewardsCfg:
     box_lift = RewTerm(
         func=mdp.box_height,
         weight=200.0,
-        params={"box_name": "box", "min_height": 0.087},
+        params={"box_name": "target_box", "min_height": 0.087},
     )
 
     # Lifting success bonus
     box_lifted = RewTerm(
         func=mdp.object_is_lifted,
         weight=500.0,
-        params={"box_name": "box", "minimal_height": 0.2},
+        params={"box_name": "target_box", "minimal_height": 0.2},
+    )
+
+    # Box spacing reward
+    left_box_spacing = RewTerm(
+        func=mdp.box_spacing,
+        weight=10.0,
+        params={
+            "box1_name": "target_box",
+            "box2_name": "left_box",
+            "box_size": (0.18, 0.18, 0.18),
+            "max_gap": 0.05,
+        },
+    )
+    right_box_spacing = RewTerm(
+        func=mdp.box_spacing,
+        weight=10.0,
+        params={
+            "box1_name": "target_box",
+            "box2_name": "right_box",
+            "box_size": (0.18, 0.18, 0.18),
+            "max_gap": 0.05,
+        },
+    )
+
+    # Keep boxes flat
+    left_box_vertical = RewTerm(
+        func=mdp.flat_orientation_l2,
+        weight=-1.0,  # Start with a small weight that will be increased by curriculum
+        params={"asset_cfg": SceneEntityCfg("left_box")},
+    )
+    right_box_vertical = RewTerm(
+        func=mdp.flat_orientation_l2,
+        weight=-1.0,  # Start with a small weight that will be increased by curriculum
+        params={"asset_cfg": SceneEntityCfg("right_box")},
+    )
+
+    # Keep boxes on table
+    left_box_fall = RewTerm(
+        func=mdp.box_height_threshold,
+        weight=-100.0,  # Large negative weight as penalty
+        params={"box_name": "left_box", "min_height": -0.1},
+    )
+    right_box_fall = RewTerm(
+        func=mdp.box_height_threshold,
+        weight=-100.0,  # Large negative weight as penalty
+        params={"box_name": "right_box", "min_height": -0.1},
     )
 
     # Regularization
@@ -208,7 +302,7 @@ class EventCfg:
         },
     )
 
-    reset_box = EventTerm(
+    reset_target_box = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
@@ -221,7 +315,41 @@ class EventCfg:
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {},  # Empty dict means zero velocities
-            "asset_cfg": SceneEntityCfg("box"),
+            "asset_cfg": SceneEntityCfg("target_box"),
+        },
+    )
+
+    reset_left_box = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            },
+            "velocity_range": {},  # Empty dict means zero velocities
+            "asset_cfg": SceneEntityCfg("left_box"),
+        },
+    )
+
+    reset_right_box = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            },
+            "velocity_range": {},  # Empty dict means zero velocities
+            "asset_cfg": SceneEntityCfg("right_box"),
         },
     )
 
@@ -252,7 +380,7 @@ class EventCfg:
             ],
             "left_robot_cfg": SceneEntityCfg("robot_left", body_names=["panda_hand"]),
             "right_robot_cfg": SceneEntityCfg("robot_right", body_names=["panda_hand"]),
-            "box_name": "box",
+            "box_name": "target_box",
             "completion_threshold": 0.05,
         },
     )
@@ -264,7 +392,8 @@ class TerminationsCfg:
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     box_fall = DoneTerm(
-        func=mdp.box_height_threshold, params={"box_name": "box", "min_height": -0.1}
+        func=mdp.box_height_threshold,
+        params={"box_name": "target_box", "min_height": -0.1},
     )
 
 
@@ -272,19 +401,29 @@ class TerminationsCfg:
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
+    left_box_vertical = CurrTerm(
+        func=mdp.modify_reward_weight,
+        params={"term_name": "left_box_vertical", "weight": -1.0, "num_steps": 8000},
+    )
+
+    right_box_vertical = CurrTerm(
+        func=mdp.modify_reward_weight,
+        params={"term_name": "right_box_vertical", "weight": -1.0, "num_steps": 8000},
+    )
+
     action_rate = CurrTerm(
         func=mdp.modify_reward_weight,
-        params={"term_name": "action_rate", "weight": -0.005, "num_steps": 14500},
+        params={"term_name": "action_rate", "weight": -0.005, "num_steps": 10_000},
     )
 
     left_joint_vel = CurrTerm(
         func=mdp.modify_reward_weight,
-        params={"term_name": "left_joint_vel", "weight": -0.001, "num_steps": 14500},
+        params={"term_name": "left_joint_vel", "weight": -0.001, "num_steps": 10_000},
     )
 
     right_joint_vel = CurrTerm(
         func=mdp.modify_reward_weight,
-        params={"term_name": "right_joint_vel", "weight": -0.001, "num_steps": 14500},
+        params={"term_name": "right_joint_vel", "weight": -0.001, "num_steps": 10_000},
     )
 
 
@@ -292,20 +431,7 @@ class CurriculumCfg:
 class CommandsCfg:
     """Command terms for the MDP."""
 
-    # box_pose = mdp.UniformPoseCommandCfg(
-    #     asset_name="box",
-    #     body_name="Object",
-    #     resampling_time_range=(4.0, 4.0),
-    #     debug_vis=True,
-    #     ranges=mdp.UniformPoseCommandCfg.Ranges(
-    #         pos_x=(0.3, 0.7),
-    #         pos_y=(-0.1, 0.1),
-    #         pos_z=(0.3, 0.3),
-    #         roll=(0.0, 0.0),
-    #         pitch=(0.0, 0.0),
-    #         yaw=(0.0, 0.0),
-    #     ),
-    # )
+    pass
 
 
 @configclass
