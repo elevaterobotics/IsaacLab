@@ -44,7 +44,8 @@ def gripper_to_box_distance(
 
     # Get gripper position
     robot: RigidObject = env.scene[robot_cfg.name]
-    gripper_pos = robot.data.body_state_w[:, robot_cfg.body_ids[0], :3]  # type: ignore
+    panda_hand_idx = 8
+    gripper_pos = robot.data.body_state_w[:, panda_hand_idx, :3]  # type: ignore
 
     # TODO: Only compute box distance in X and Y, compare Z to height above table/robot base
 
@@ -64,9 +65,7 @@ class WaypointProgress(ManagerTermBase):
         self.right_waypoints: list[list[float]] = cfg.params["right_waypoints"]
 
         # Initialize current waypoint index tensor for each environment
-        self.current_waypoints = torch.zeros(
-            env.num_envs, device=env.device, dtype=torch.long
-        )
+        self.current_waypoints = torch.zeros(env.num_envs, device=env.device, dtype=torch.long)
 
         self.completion_threshold = cfg.params.get("completion_threshold", 0.05)
         self.left_robot_cfg = cfg.params["left_robot_cfg"]
@@ -81,12 +80,8 @@ class WaypointProgress(ManagerTermBase):
 
     def __call__(self, env, valid_env_ids: torch.Tensor):
         # Get current waypoints for each environment
-        left_offsets = torch.tensor(self.left_waypoints, device=env.device)[
-            self.current_waypoints
-        ]
-        right_offsets = torch.tensor(self.right_waypoints, device=env.device)[
-            self.current_waypoints
-        ]
+        left_offsets = torch.tensor(self.left_waypoints, device=env.device)[self.current_waypoints]
+        right_offsets = torch.tensor(self.right_waypoints, device=env.device)[self.current_waypoints]
 
         # Compute distances for each environment
         left_distances = gripper_to_box_distance(
@@ -103,9 +98,7 @@ class WaypointProgress(ManagerTermBase):
         )
 
         # Find environments where both grippers are at their waypoints
-        both_at_waypoint = (left_distances < self.completion_threshold) & (
-            right_distances < self.completion_threshold
-        )
+        both_at_waypoint = (left_distances < self.completion_threshold) & (right_distances < self.completion_threshold)
 
         # Increment waypoint index for those environments, but don't exceed max waypoints
         max_waypoint = len(self.left_waypoints) - 1
@@ -135,16 +128,10 @@ def gripper_to_dynamic_waypoint(
     progress_manager = env.event_manager.get_term_cfg("waypoint_progress").func
 
     # Get waypoints list based on which arm we're computing for
-    waypoints = (
-        progress_manager.left_waypoints
-        if is_left_arm
-        else progress_manager.right_waypoints
-    )
+    waypoints = progress_manager.left_waypoints if is_left_arm else progress_manager.right_waypoints
 
     # Convert waypoints to tensor and index using current waypoint for each env
-    current_offsets = torch.tensor(waypoints, device=env.device)[
-        progress_manager.current_waypoints
-    ]
+    current_offsets = torch.tensor(waypoints, device=env.device)[progress_manager.current_waypoints]
 
     return gripper_to_box_distance(env, robot_cfg, box_name, current_offsets)
 
@@ -154,9 +141,7 @@ def waypoint_progress(env: ManagerBasedRLEnv) -> torch.Tensor:
     return progress_manager.current_waypoints
 
 
-def position_command_error(
-    env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg
-) -> torch.Tensor:
+def position_command_error(env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize tracking of the position error using L2-norm.
 
     The function computes the position error between the desired position (from the command) and the
@@ -168,9 +153,7 @@ def position_command_error(
     command = env.command_manager.get_command(command_name)
     # obtain the desired and current positions
     des_pos_b = command[:, :3]
-    des_pos_w, _ = combine_frame_transforms(
-        asset.data.root_state_w[:, :3], asset.data.root_state_w[:, 3:7], des_pos_b
-    )
+    des_pos_w, _ = combine_frame_transforms(asset.data.root_state_w[:, :3], asset.data.root_state_w[:, 3:7], des_pos_b)
     curr_pos_w = asset.data.body_state_w[:, asset_cfg.body_ids[0], :3]  # type: ignore
     return torch.norm(curr_pos_w - des_pos_w, dim=1)
 
@@ -188,17 +171,13 @@ def position_command_error_tanh(
     command = env.command_manager.get_command(command_name)
     # obtain the desired and current positions
     des_pos_b = command[:, :3]
-    des_pos_w, _ = combine_frame_transforms(
-        asset.data.root_state_w[:, :3], asset.data.root_state_w[:, 3:7], des_pos_b
-    )
+    des_pos_w, _ = combine_frame_transforms(asset.data.root_state_w[:, :3], asset.data.root_state_w[:, 3:7], des_pos_b)
     curr_pos_w = asset.data.body_state_w[:, asset_cfg.body_ids[0], :3]  # type: ignore
     distance = torch.norm(curr_pos_w - des_pos_w, dim=1)
     return 1 - torch.tanh(distance / std)
 
 
-def orientation_command_error(
-    env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg
-) -> torch.Tensor:
+def orientation_command_error(env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize tracking orientation error using shortest path.
 
     The function computes the orientation error between the desired orientation (from the command) and the
@@ -215,9 +194,7 @@ def orientation_command_error(
     return quat_error_magnitude(curr_quat_w, des_quat_w)
 
 
-def object_is_lifted(
-    env: ManagerBasedRLEnv, box_name: str, minimal_height: float
-) -> torch.Tensor:
+def object_is_lifted(env: ManagerBasedRLEnv, box_name: str, minimal_height: float) -> torch.Tensor:
     """Reward the agent for lifting the box above the minimal height.
 
     Args:
@@ -232,9 +209,7 @@ def object_is_lifted(
     return torch.where(box.data.root_state_w[:, 2] > minimal_height, 1.0, 0.0)
 
 
-def box_height(
-    env: ManagerBasedRLEnv, box_name: str, min_height: float
-) -> torch.Tensor:
+def box_height(env: ManagerBasedRLEnv, box_name: str, min_height: float) -> torch.Tensor:
     """Continuous reward based on box height relative to minimum height.
 
     Args:
@@ -252,9 +227,7 @@ def box_height(
     return height_diff
 
 
-def box_height_threshold(
-    env: ManagerBasedRLEnv, box_name: str, min_height: float
-) -> torch.Tensor:
+def box_height_threshold(env: ManagerBasedRLEnv, box_name: str, min_height: float) -> torch.Tensor:
     """Check if box has fallen below minimum height (for termination).
 
     Args:

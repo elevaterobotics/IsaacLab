@@ -37,8 +37,9 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 #   [ ] Handle neighboring boxes
 #   [ ] Place box in new location
 #   [ ] Multiple picks
-# [ ] Ablation  / experiments:
-#   [ ] Fix waypoint offsets and calculations (box_to_gripper_distance)
+# [O] Ablation  / experiments:
+#   [O] Fix waypoint offsets and calculations (box_to_gripper_distance)
+#   [ ] Add waypoint observations
 #   [ ] Randomized box positions
 #   [ ] Remove waypoints
 #   [ ] shortened episode length
@@ -365,12 +366,12 @@ class EventCfg:
         interval_range_s=(0.01, 0.01),  # Run often
         params={
             "left_waypoints": [
-                [0.0, 0.25, 0.0],  # Move to pre-grasp position
-                [0.0, 0.15, 0.05],  # Move in and lift slightly
+                [0.0, 0.25, 0.12],  # Move to pre-grasp position
+                [0.0, 0.15, 0.15],  # Move in and lift slightly
                 [0.0, 0.15, 0.2],  # Lift higher
             ],
             "right_waypoints": [
-                [0.0, -0.25, 0.0],  # Move to pre-grasp position
+                [0.0, -0.25, 0.12],  # Move to pre-grasp position
                 [0.0, -0.15, 0.05],  # Move in and lift slightly
                 [0.0, -0.15, 0.2],  # Lift higher
             ],
