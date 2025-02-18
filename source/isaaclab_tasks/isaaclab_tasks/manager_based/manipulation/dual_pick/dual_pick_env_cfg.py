@@ -25,6 +25,46 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 
+# TODO
+# [X] Re-create successful dual pick with minimal changes:
+#   [X] new reward terms weighted to zero
+#   [X] new boxes far from target box
+#   [X] observations for new boxes (should be ignored by policy)
+# [X] Add boxes back in
+# [ ] New behavior:
+#   [ ] Stable grip (reward box being in gripper)
+#   [ ] Handle boxes in different positions
+#   [ ] Handle neighboring boxes
+#   [ ] Place box in new location
+#   [ ] Multiple picks
+# [ ] Ablation  / experiments:
+#   [ ] Fix waypoint offsets and calculations (box_to_gripper_distance)
+#   [ ] Remove waypoints
+#   [ ] shortened episode length
+#   [ ] Network size: layers: [256, 128, 64]
+#   [ ] IK vs joint control
+#   [ ] Observations: add relative positions of grippers to box
+# [ ] Hyper parameter tuning
+#   [X] larger policy / value network size
+#   [ ] learning rate
+#   [ ] batch size
+#   [ ] cartesion actions using IK
+# [ ] Add randomization:
+#   [ ] box poses
+#   [ ] box sizes
+#   [ ] box masses
+# [ ] More realistic environment:
+#   [ ] Non-rigid boxes
+#   [ ] Boxes on pallet on foor
+#   [ ] More realistic / complex box arrangements
+# [ ] Better robot
+#   [ ] Elevate arm
+#   [ ] Mobile base
+#   [ ] Paddle grippers
+#   [ ] Vaccum grippers
+#   [ ] Shoulder lift and rotate joints that move both arms
+# [ ] Get video working
+
 
 @configclass
 class DualPickSceneCfg(InteractiveSceneCfg):
@@ -42,17 +82,13 @@ class DualPickSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
         ),
-        init_state=AssetBaseCfg.InitialStateCfg(
-            pos=(0.55, 0.0, 0.0), rot=(0.70711, 0.0, 0.0, 0.70711)
-        ),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.55, 0.0, 0.0), rot=(0.70711, 0.0, 0.0, 0.70711)),
     )
 
     # Box to pick
     box = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/Object",
-        init_state=RigidObjectCfg.InitialStateCfg(
-            pos=[0.5, 0, 0.087], rot=[1, 0, 0, 0]
-        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.087], rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
             scale=(3.0, 3.0, 3.0),
@@ -263,9 +299,7 @@ class TerminationsCfg:
     """Termination terms for the MDP."""
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    box_fall = DoneTerm(
-        func=mdp.box_height_threshold, params={"box_name": "box", "min_height": -0.1}
-    )
+    box_fall = DoneTerm(func=mdp.box_height_threshold, params={"box_name": "box", "min_height": -0.1})
 
 
 @configclass
