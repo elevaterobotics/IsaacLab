@@ -194,37 +194,38 @@ def orientation_command_error(env: ManagerBasedRLEnv, command_name: str, asset_c
     return quat_error_magnitude(curr_quat_w, des_quat_w)
 
 
-def object_is_lifted(env: ManagerBasedRLEnv, box_name: str, minimal_height: float) -> torch.Tensor:
+def box_lifted(env: ManagerBasedRLEnv, box_name: str, min_height: float, max_height: float) -> torch.Tensor:
     """Reward the agent for lifting the box above the minimal height.
 
     Args:
         env: The environment instance
         box_name: Name of the box object
-        minimal_height: Minimum height threshold for considering box as lifted
+        min_height: Minimum height threshold for considering box as lifted
+        max_height: Maximum height threshold for considering box as lifted
 
     Returns:
-        Binary reward tensor (1.0 if lifted, 0.0 otherwise)
+        Binary reward tensor (1.0 if lifted within height range, 0.0 otherwise)
     """
     box: RigidObject = env.scene[box_name]
-    return torch.where(box.data.root_state_w[:, 2] > minimal_height, 1.0, 0.0)
+    height = box.data.root_state_w[:, 2]
+    return torch.where((height > min_height) & (height < max_height), 1.0, 0.0)
 
 
-def box_height(env: ManagerBasedRLEnv, box_name: str, min_height: float) -> torch.Tensor:
+def box_height(env: ManagerBasedRLEnv, box_name: str, min_height: float, max_height: float) -> torch.Tensor:
     """Continuous reward based on box height relative to minimum height.
 
     Args:
         env: The environment instance
         box_name: Name of the box object
         min_height: Minimum height threshold
+        max_height: Maximum height threshold
 
     Returns:
-        Height-based reward that is positive above min_height and negative below
+        Height-based reward that is positive between min_height and max_height, and negative outside this range
     """
     box: RigidObject = env.scene[box_name]
     box_height = box.data.root_state_w[:, 2]  # z-coordinate
-    height_diff = box_height - min_height
-    # Positive reward above min_height, negative below
-    return height_diff
+    return torch.where(box_height < max_height, box_height - min_height, max_height - box_height)
 
 
 def box_height_threshold(env: ManagerBasedRLEnv, box_name: str, min_height: float) -> torch.Tensor:

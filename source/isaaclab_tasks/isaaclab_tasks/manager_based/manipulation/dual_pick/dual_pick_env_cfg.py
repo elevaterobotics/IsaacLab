@@ -40,16 +40,18 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 # [O] Ablation  / experiments:
 #   [X] Optional extra boxes: slightly faster convergence
 #   [X] Fix waypoint offsets and calculations: less reward, slower convergence
-#   [O] Remove waypoints
-#   [ ] Add waypoint observations
+#   [X] Remove waypoints: failed to pick box
+#   [O] > max height penalty (maybe as a curriculum)
+#   [ ] penalize high velocity in lift range
 #   [ ] Randomized box positions
 #   [ ] shortened episode length
 #   [ ] Network size: layers: [256, 128, 64]
 #   [ ] Symmetric grip reward
-#   [ ] > max height penalty (maybe as a curriculum)
 #   [ ] IK vs joint control
 #   [ ] Observations: add relative positions of grippers to box
 #   [ ] Extra boxes
+#   [ ] Add waypoint observations
+#   [ ] fewer waypoints / no waypoint progress
 # [ ] Hyper parameter tuning
 #   [X] larger policy / value network size
 #   [ ] learning rate
@@ -236,38 +238,38 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # Task rewards using dynamic waypoints
-    # left_gripper_to_waypoint = RewTerm(
-    #     func=mdp.gripper_to_dynamic_waypoint,
-    #     weight=-0.2,
-    #     params={
-    #         "robot_cfg": SceneEntityCfg("robot_left", body_names=["panda_hand"]),
-    #         "box_name": "target_box",
-    #         "is_left_arm": True,
-    #     },
-    # )
-    # right_gripper_to_waypoint = RewTerm(
-    #     func=mdp.gripper_to_dynamic_waypoint,
-    #     weight=-0.2,
-    #     params={
-    #         "robot_cfg": SceneEntityCfg("robot_right", body_names=["panda_hand"]),
-    #         "box_name": "target_box",
-    #         "is_left_arm": False,
-    #     },
-    # )
-    # waypoint_progress = RewTerm(func=mdp.waypoint_progress, weight=0.4, params={})
+    left_gripper_to_waypoint = RewTerm(
+        func=mdp.gripper_to_dynamic_waypoint,
+        weight=-0.2,
+        params={
+            "robot_cfg": SceneEntityCfg("robot_left", body_names=["panda_hand"]),
+            "box_name": "target_box",
+            "is_left_arm": True,
+        },
+    )
+    right_gripper_to_waypoint = RewTerm(
+        func=mdp.gripper_to_dynamic_waypoint,
+        weight=-0.2,
+        params={
+            "robot_cfg": SceneEntityCfg("robot_right", body_names=["panda_hand"]),
+            "box_name": "target_box",
+            "is_left_arm": False,
+        },
+    )
+    waypoint_progress = RewTerm(func=mdp.waypoint_progress, weight=0.4, params={})
 
     # Lifting reward
     box_lift = RewTerm(
         func=mdp.box_height,
         weight=200.0,
-        params={"box_name": "target_box", "min_height": 0.087},
+        params={"box_name": "target_box", "min_height": 0.087, "max_height": 0.5},
     )
 
     # Lifting success bonus
     box_lifted = RewTerm(
-        func=mdp.object_is_lifted,
+        func=mdp.box_lifted,
         weight=500.0,
-        params={"box_name": "target_box", "minimal_height": 0.2},
+        params={"box_name": "target_box", "min_height": 0.2, "max_height": 0.4},
     )
 
     # Regularization
