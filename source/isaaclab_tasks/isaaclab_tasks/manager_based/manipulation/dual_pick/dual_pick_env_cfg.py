@@ -39,11 +39,13 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 #   [ ] Multiple picks
 # [ ] Ablation  / experiments:
 #   [ ] Fix waypoint offsets and calculations (box_to_gripper_distance)
+#   [ ] Randomized box positions
 #   [ ] Remove waypoints
 #   [ ] shortened episode length
 #   [ ] Network size: layers: [256, 128, 64]
 #   [ ] IK vs joint control
 #   [ ] Observations: add relative positions of grippers to box
+#   [ ] Extra boxes
 # [ ] Hyper parameter tuning
 #   [X] larger policy / value network size
 #   [ ] learning rate
@@ -66,6 +68,10 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 # [ ] Get video working
 
 
+# TODO: Move this to proper config
+INCLUDE_EXTRA_BOXES = False
+
+
 @configclass
 class DualPickSceneCfg(InteractiveSceneCfg):
     """Configuration for the scene with two robotic arms and a box."""
@@ -86,8 +92,8 @@ class DualPickSceneCfg(InteractiveSceneCfg):
     )
 
     # Box to pick
-    box = RigidObjectCfg(
-        prim_path="{ENV_REGEX_NS}/Object",
+    target_box = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/TargetBox",
         init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.087], rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
@@ -102,6 +108,41 @@ class DualPickSceneCfg(InteractiveSceneCfg):
             ),
         ),
     )
+
+    if INCLUDE_EXTRA_BOXES:
+        left_box = RigidObjectCfg(
+            prim_path="{ENV_REGEX_NS}/LeftBox",
+            init_state=RigidObjectCfg.InitialStateCfg(pos=[0.9, 0.275, 0.087], rot=[1, 0, 0, 0]),
+            spawn=UsdFileCfg(
+                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
+                scale=(3.0, 3.0, 3.0),
+                rigid_props=RigidBodyPropertiesCfg(
+                    solver_position_iteration_count=16,
+                    solver_velocity_iteration_count=1,
+                    max_angular_velocity=1000.0,
+                    max_linear_velocity=1000.0,
+                    max_depenetration_velocity=5.0,
+                    disable_gravity=False,
+                ),
+            ),
+        )
+
+        right_box = RigidObjectCfg(
+            prim_path="{ENV_REGEX_NS}/RightBox",
+            init_state=RigidObjectCfg.InitialStateCfg(pos=[0.9, -0.275, 0.087], rot=[1, 0, 0, 0]),
+            spawn=UsdFileCfg(
+                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
+                scale=(3.0, 3.0, 3.0),
+                rigid_props=RigidBodyPropertiesCfg(
+                    solver_position_iteration_count=16,
+                    solver_velocity_iteration_count=1,
+                    max_angular_velocity=1000.0,
+                    max_linear_velocity=1000.0,
+                    max_depenetration_velocity=5.0,
+                    disable_gravity=False,
+                ),
+            ),
+        )
 
     # robots
     robot_left: ArticulationCfg = MISSING
@@ -159,11 +200,23 @@ class ObservationsCfg:
         )
 
         # Box pose observation
-        box_pose = ObsTerm(
+        target_box_pose = ObsTerm(
             func=mdp.object_pose,
-            params={"object_name": "box"},
+            params={"object_name": "target_box"},
             noise=Unoise(n_min=-0.01, n_max=0.01),
         )
+
+        if INCLUDE_EXTRA_BOXES:
+            left_box_pose = ObsTerm(
+                func=mdp.object_pose,
+                params={"object_name": "left_box"},
+                noise=Unoise(n_min=-0.01, n_max=0.01),
+            )
+            right_box_pose = ObsTerm(
+                func=mdp.object_pose,
+                params={"object_name": "right_box"},
+                noise=Unoise(n_min=-0.01, n_max=0.01),
+            )
 
         actions = ObsTerm(func=mdp.last_action)
 
@@ -184,7 +237,7 @@ class RewardsCfg:
         weight=-0.2,
         params={
             "robot_cfg": SceneEntityCfg("robot_left", body_names=["panda_hand"]),
-            "box_name": "box",
+            "box_name": "target_box",
             "is_left_arm": True,
         },
     )
@@ -193,7 +246,7 @@ class RewardsCfg:
         weight=-0.2,
         params={
             "robot_cfg": SceneEntityCfg("robot_right", body_names=["panda_hand"]),
-            "box_name": "box",
+            "box_name": "target_box",
             "is_left_arm": False,
         },
     )
@@ -203,14 +256,14 @@ class RewardsCfg:
     box_lift = RewTerm(
         func=mdp.box_height,
         weight=200.0,
-        params={"box_name": "box", "min_height": 0.087},
+        params={"box_name": "target_box", "min_height": 0.087},
     )
 
     # Lifting success bonus
     box_lifted = RewTerm(
         func=mdp.object_is_lifted,
         weight=500.0,
-        params={"box_name": "box", "minimal_height": 0.2},
+        params={"box_name": "target_box", "minimal_height": 0.2},
     )
 
     # Regularization
@@ -244,7 +297,17 @@ class EventCfg:
         },
     )
 
-    reset_box = EventTerm(
+    reset_robot_right_joints = EventTerm(
+        func=mdp.reset_joints_by_scale,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot_right"),
+            "position_range": (0.5, 1.5),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+    reset_target_box = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
@@ -257,19 +320,44 @@ class EventCfg:
                 "yaw": (0.0, 0.0),
             },
             "velocity_range": {},  # Empty dict means zero velocities
-            "asset_cfg": SceneEntityCfg("box"),
+            "asset_cfg": SceneEntityCfg("target_box"),
         },
     )
 
-    reset_robot_right_joints = EventTerm(
-        func=mdp.reset_joints_by_scale,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot_right"),
-            "position_range": (0.5, 1.5),
-            "velocity_range": (0.0, 0.0),
-        },
-    )
+    if INCLUDE_EXTRA_BOXES:
+        reset_left_box = EventTerm(
+            func=mdp.reset_root_state_uniform,
+            mode="reset",
+            params={
+                "pose_range": {
+                    "x": (0.0, 0.0),
+                    "y": (0.0, 0.0),
+                    "z": (0.0, 0.0),
+                    "roll": (0.0, 0.0),
+                    "pitch": (0.0, 0.0),
+                    "yaw": (0.0, 0.0),
+                },
+                "velocity_range": {},  # Empty dict means zero velocities
+                "asset_cfg": SceneEntityCfg("left_box"),
+            },
+        )
+
+        reset_right_box = EventTerm(
+            func=mdp.reset_root_state_uniform,
+            mode="reset",
+            params={
+                "pose_range": {
+                    "x": (0.0, 0.0),
+                    "y": (0.0, 0.0),
+                    "z": (0.0, 0.0),
+                    "roll": (0.0, 0.0),
+                    "pitch": (0.0, 0.0),
+                    "yaw": (0.0, 0.0),
+                },
+                "velocity_range": {},  # Empty dict means zero velocities
+                "asset_cfg": SceneEntityCfg("right_box"),
+            },
+        )
 
     waypoint_progress = EventTerm(
         func=mdp.WaypointProgress,
@@ -288,7 +376,7 @@ class EventCfg:
             ],
             "left_robot_cfg": SceneEntityCfg("robot_left", body_names=["panda_hand"]),
             "right_robot_cfg": SceneEntityCfg("robot_right", body_names=["panda_hand"]),
-            "box_name": "box",
+            "box_name": "target_box",
             "completion_threshold": 0.05,
         },
     )
@@ -299,7 +387,7 @@ class TerminationsCfg:
     """Termination terms for the MDP."""
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    box_fall = DoneTerm(func=mdp.box_height_threshold, params={"box_name": "box", "min_height": -0.1})
+    box_fall = DoneTerm(func=mdp.box_height_threshold, params={"box_name": "target_box", "min_height": -0.1})
 
 
 @configclass
@@ -308,17 +396,17 @@ class CurriculumCfg:
 
     action_rate = CurrTerm(
         func=mdp.modify_reward_weight,
-        params={"term_name": "action_rate", "weight": -0.005, "num_steps": 14500},
+        params={"term_name": "action_rate", "weight": -0.005, "num_steps": 14_500},
     )
 
     left_joint_vel = CurrTerm(
         func=mdp.modify_reward_weight,
-        params={"term_name": "left_joint_vel", "weight": -0.001, "num_steps": 14500},
+        params={"term_name": "left_joint_vel", "weight": -0.001, "num_steps": 14_500},
     )
 
     right_joint_vel = CurrTerm(
         func=mdp.modify_reward_weight,
-        params={"term_name": "right_joint_vel", "weight": -0.001, "num_steps": 14500},
+        params={"term_name": "right_joint_vel", "weight": -0.001, "num_steps": 14_500},
     )
 
 
@@ -326,20 +414,7 @@ class CurriculumCfg:
 class CommandsCfg:
     """Command terms for the MDP."""
 
-    # box_pose = mdp.UniformPoseCommandCfg(
-    #     asset_name="box",
-    #     body_name="Object",
-    #     resampling_time_range=(4.0, 4.0),
-    #     debug_vis=True,
-    #     ranges=mdp.UniformPoseCommandCfg.Ranges(
-    #         pos_x=(0.3, 0.7),
-    #         pos_y=(-0.1, 0.1),
-    #         pos_z=(0.3, 0.3),
-    #         roll=(0.0, 0.0),
-    #         pitch=(0.0, 0.0),
-    #         yaw=(0.0, 0.0),
-    #     ),
-    # )
+    pass
 
 
 @configclass
