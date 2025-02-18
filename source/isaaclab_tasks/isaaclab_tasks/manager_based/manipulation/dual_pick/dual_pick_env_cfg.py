@@ -44,13 +44,14 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 #   [X] > max height penalty: lower picks, but not stable yet, longer training
 #   [X] low velocity reward: best performance ever, long training still
 #   [X] Network size: layers: [256, 128, 64]: faster convergence, better grasp
-#   [O] Randomized box positions: never learned to pick
+#   [X] Randomized box positions: never learned to pick
+#   [X] shortened episode length: faster convergence going from 12 to 6 seconds
+#   [X] Double check box position observation: fix led to faster convergence
+#   [X] Add box velocity observation: led to faster convergence (coupled with fix)
+#   [ ] Randomized box positions (again)
 #   [ ] Max height curriculum
-#   [ ] shortened episode length
 #   [ ] Symmetric grip reward
 #   [ ] IK vs joint control
-#   [ ] Add box velocity observation
-#   [ ] Double check box position observation
 #   [ ] Add relative gripper_t_box pose observation
 #   [ ] Add waypoint observations
 #   [ ] fewer waypoints / no waypoint progress

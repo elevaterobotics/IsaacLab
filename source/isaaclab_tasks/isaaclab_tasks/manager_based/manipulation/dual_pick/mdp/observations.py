@@ -32,8 +32,10 @@ def object_pose(env: ManagerBasedRLEnv, object_name: str = "box") -> torch.Tenso
 
     # Get position and orientation from root state
     # Root state contains [pos, quat, lin_vel, ang_vel]
-    object_pos = object.data.root_pos_w
-    object_quat = object.data.root_quat_w
+    object_pos_e = object.data.root_pos_w - env.scene.env_origins
+    object_quat_e = object.data.root_quat_w
+    object_lin_vel_e = object.data.root_lin_vel_b
+    object_ang_vel_e = object.data.root_ang_vel_b
 
     # Concatenate position and orientation
-    return torch.cat([object_pos, object_quat], dim=1)
+    return torch.cat([object_pos_e, object_quat_e, object_lin_vel_e, object_ang_vel_e], dim=1)
