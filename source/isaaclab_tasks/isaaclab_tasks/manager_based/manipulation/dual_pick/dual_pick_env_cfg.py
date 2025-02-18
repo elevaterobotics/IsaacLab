@@ -41,11 +41,12 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 #   [X] Optional extra boxes: slightly faster convergence
 #   [X] Fix waypoint offsets and calculations: less reward, slower convergence
 #   [X] Remove waypoints: failed to pick box
-#   [O] > max height penalty (maybe as a curriculum)
+#   [X] > max height penalty: lower picks, but not stable yet, longer training
+#   [X] low velocity reward: best performance ever, long training still
+#   [ ] Network size: layers: [256, 128, 64]
 #   [ ] penalize high velocity in lift range
 #   [ ] Randomized box positions
 #   [ ] shortened episode length
-#   [ ] Network size: layers: [256, 128, 64]
 #   [ ] Symmetric grip reward
 #   [ ] IK vs joint control
 #   [ ] Observations: add relative positions of grippers to box
@@ -265,10 +266,16 @@ class RewardsCfg:
         params={"box_name": "target_box", "min_height": 0.087, "max_height": 0.5},
     )
 
+    box_low_velocity = RewTerm(
+        func=mdp.box_low_velocity,
+        weight=100.0,
+        params={"box_name": "target_box", "min_height": 0.2, "max_height": 0.5},
+    )
+
     # Lifting success bonus
     box_lifted = RewTerm(
         func=mdp.box_lifted,
-        weight=500.0,
+        weight=100.0,
         params={"box_name": "target_box", "min_height": 0.2, "max_height": 0.4},
     )
 

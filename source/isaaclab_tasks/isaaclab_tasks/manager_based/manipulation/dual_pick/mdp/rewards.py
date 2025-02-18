@@ -204,11 +204,36 @@ def box_lifted(env: ManagerBasedRLEnv, box_name: str, min_height: float, max_hei
         max_height: Maximum height threshold for considering box as lifted
 
     Returns:
-        Binary reward tensor (1.0 if lifted within height range, 0.0 otherwise)
+        Binary reward tensor (1.0 if lifted within height range, 0.0 otherwise), shape: [num_envs]
     """
     box: RigidObject = env.scene[box_name]
     height = box.data.root_state_w[:, 2]
     return torch.where((height > min_height) & (height < max_height), 1.0, 0.0)
+
+
+def box_low_velocity(env: ManagerBasedRLEnv, box_name: str, min_height: float, max_height: float) -> torch.Tensor:
+    """Reward for having low velocity in the lift range.
+
+    Args:
+        env: The environment instance
+        box_name: Name of the box object
+        min_height: Minimum height threshold for considering box as lifted
+        max_height: Maximum height threshold for considering box as lifted
+    Returns:
+        Reward tensor (near 1 if low velocity and in range, near 0 otherwise)
+    """
+    box: RigidObject = env.scene[box_name]
+    height = box.data.root_state_w[:, 2]
+    lin_vel = box.data.root_state_w[:, 7:10]
+    angular_vel = box.data.root_state_w[:, 10:13]
+
+    lin_vel_mag = torch.norm(lin_vel, dim=1)
+    angular_vel_mag = torch.norm(angular_vel, dim=1)
+
+    velocity_reward = torch.exp(-(lin_vel_mag + angular_vel_mag) / 0.1)
+    in_range = (height > min_height) & (height < max_height)
+
+    return torch.where(in_range, velocity_reward, torch.zeros_like(velocity_reward))
 
 
 def box_height(env: ManagerBasedRLEnv, box_name: str, min_height: float, max_height: float) -> torch.Tensor:

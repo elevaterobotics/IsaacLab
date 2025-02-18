@@ -60,7 +60,7 @@ agent:
   # logging and checkpoint
   experiment:
     directory: "dual_pick"
-    experiment_name: "max_height_penalty"
+    experiment_name: "low_velocity_reward_cntd"
     write_interval: auto
     checkpoint_interval: auto
 
