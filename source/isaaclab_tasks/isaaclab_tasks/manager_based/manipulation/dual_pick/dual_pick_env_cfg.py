@@ -45,11 +45,13 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 #   [X] low velocity reward: best performance ever, long training still
 #   [X] Network size: layers: [256, 128, 64]: faster convergence, better grasp
 #   [O] Randomized box positions: never learned to pick
+#   [ ] Max height curriculum
 #   [ ] shortened episode length
 #   [ ] Symmetric grip reward
 #   [ ] IK vs joint control
-#   [ ] Observations: add relative positions of grippers to box
-#   [ ] Extra boxes
+#   [ ] Add box velocity observation
+#   [ ] Double check box position observation
+#   [ ] Add relative gripper_t_box pose observation
 #   [ ] Add waypoint observations
 #   [ ] fewer waypoints / no waypoint progress
 # [ ] Hyper parameter tuning
@@ -61,21 +63,29 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 #   [ ] box poses
 #   [ ] box sizes
 #   [ ] box masses
+# [ ] Human demonstration
+#   [ ] Teleoperation of robot in simulation
+#   [ ] Classic planning approach to picking
+#   [ ] Way to feed human / simulated examples into RL
 # [ ] More realistic environment:
 #   [ ] Non-rigid boxes
 #   [ ] Boxes on pallet on foor
+#   [ ] Boxes stacked on boxes
 #   [ ] More realistic / complex box arrangements
 # [ ] Better robot
 #   [ ] Elevate arm
 #   [ ] Mobile base
 #   [ ] Paddle grippers
+#   [ ] Single finger gripper (palm + large finger, with single rotation joint)
 #   [ ] Vaccum grippers
 #   [ ] Shoulder lift and rotate joints that move both arms
 # [ ] Get video working
 
 
-# TODO: Move this to proper config
+# TODO: Move these to proper config
 INCLUDE_EXTRA_BOXES = False
+RANDOM_BOX_POSITIONS = False
+MAX_HEIGHT_PENALTY = False
 
 
 @configclass
@@ -262,20 +272,20 @@ class RewardsCfg:
     box_lift = RewTerm(
         func=mdp.box_height,
         weight=200.0,
-        params={"box_name": "target_box", "min_height": 0.087, "max_height": 0.5},
+        params={"box_name": "target_box", "min_height": 0.087, "max_height": 0.5 if MAX_HEIGHT_PENALTY else 5.0},
     )
 
     box_low_velocity = RewTerm(
         func=mdp.box_low_velocity,
-        weight=400.0,
-        params={"box_name": "target_box", "min_height": 0.2, "max_height": 0.5},
+        weight=4000.0,
+        params={"box_name": "target_box", "min_height": 0.2, "max_height": 0.4 if MAX_HEIGHT_PENALTY else 4.0},
     )
 
     # Lifting success bonus
     box_lifted = RewTerm(
         func=mdp.box_lifted,
         weight=400.0,
-        params={"box_name": "target_box", "min_height": 0.2, "max_height": 0.4},
+        params={"box_name": "target_box", "min_height": 0.2, "max_height": 0.4 if MAX_HEIGHT_PENALTY else 4.0},
     )
 
     # Regularization
@@ -324,12 +334,12 @@ class EventCfg:
         mode="reset",
         params={
             "pose_range": {
-                "x": (-0.15, 0.15),  # Fixed x position
-                "y": (-0.15, 0.15),  # Fixed y position
+                "x": (-0.15, 0.15) if RANDOM_BOX_POSITIONS else (0.0, 0.0),
+                "y": (-0.15, 0.15) if RANDOM_BOX_POSITIONS else (0.0, 0.0),
                 "z": (0.0, 0.0),  # Fixed z position
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
-                "yaw": (-0.8, 0.8),
+                "yaw": (-0.8, 0.8) if RANDOM_BOX_POSITIONS else (0.0, 0.0),
             },
             "velocity_range": {},  # Empty dict means zero velocities
             "asset_cfg": SceneEntityCfg("target_box"),
