@@ -38,12 +38,15 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 #   [ ] Place box in new location
 #   [ ] Multiple picks
 # [O] Ablation  / experiments:
-#   [O] Fix waypoint offsets and calculations (box_to_gripper_distance)
+#   [X] Optional extra boxes: slightly faster convergence
+#   [X] Fix waypoint offsets and calculations: less reward, slower convergence
+#   [O] Remove waypoints
 #   [ ] Add waypoint observations
 #   [ ] Randomized box positions
-#   [ ] Remove waypoints
 #   [ ] shortened episode length
 #   [ ] Network size: layers: [256, 128, 64]
+#   [ ] Symmetric grip reward
+#   [ ] > max height penalty (maybe as a curriculum)
 #   [ ] IK vs joint control
 #   [ ] Observations: add relative positions of grippers to box
 #   [ ] Extra boxes
@@ -233,25 +236,25 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # Task rewards using dynamic waypoints
-    left_gripper_to_waypoint = RewTerm(
-        func=mdp.gripper_to_dynamic_waypoint,
-        weight=-0.2,
-        params={
-            "robot_cfg": SceneEntityCfg("robot_left", body_names=["panda_hand"]),
-            "box_name": "target_box",
-            "is_left_arm": True,
-        },
-    )
-    right_gripper_to_waypoint = RewTerm(
-        func=mdp.gripper_to_dynamic_waypoint,
-        weight=-0.2,
-        params={
-            "robot_cfg": SceneEntityCfg("robot_right", body_names=["panda_hand"]),
-            "box_name": "target_box",
-            "is_left_arm": False,
-        },
-    )
-    waypoint_progress = RewTerm(func=mdp.waypoint_progress, weight=0.4, params={})
+    # left_gripper_to_waypoint = RewTerm(
+    #     func=mdp.gripper_to_dynamic_waypoint,
+    #     weight=-0.2,
+    #     params={
+    #         "robot_cfg": SceneEntityCfg("robot_left", body_names=["panda_hand"]),
+    #         "box_name": "target_box",
+    #         "is_left_arm": True,
+    #     },
+    # )
+    # right_gripper_to_waypoint = RewTerm(
+    #     func=mdp.gripper_to_dynamic_waypoint,
+    #     weight=-0.2,
+    #     params={
+    #         "robot_cfg": SceneEntityCfg("robot_right", body_names=["panda_hand"]),
+    #         "box_name": "target_box",
+    #         "is_left_arm": False,
+    #     },
+    # )
+    # waypoint_progress = RewTerm(func=mdp.waypoint_progress, weight=0.4, params={})
 
     # Lifting reward
     box_lift = RewTerm(
@@ -360,18 +363,20 @@ class EventCfg:
             },
         )
 
+    # Note that this basically commands panda_hand to hit the table, because it's not accounting for the
+    # 10cm between panda_hand and the fingertips, but "fixing" this results in worse experience.
     waypoint_progress = EventTerm(
         func=mdp.WaypointProgress,
         mode="interval",
         interval_range_s=(0.01, 0.01),  # Run often
         params={
             "left_waypoints": [
-                [0.0, 0.25, 0.12],  # Move to pre-grasp position
-                [0.0, 0.15, 0.15],  # Move in and lift slightly
+                [0.0, 0.25, 0.0],  # Move to pre-grasp position
+                [0.0, 0.15, 0.05],  # Move in and lift slightly
                 [0.0, 0.15, 0.2],  # Lift higher
             ],
             "right_waypoints": [
-                [0.0, -0.25, 0.12],  # Move to pre-grasp position
+                [0.0, -0.25, 0.0],  # Move to pre-grasp position
                 [0.0, -0.15, 0.05],  # Move in and lift slightly
                 [0.0, -0.15, 0.2],  # Lift higher
             ],

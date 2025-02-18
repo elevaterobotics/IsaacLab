@@ -44,7 +44,7 @@ def gripper_to_box_distance(
 
     # Get gripper position
     robot: RigidObject = env.scene[robot_cfg.name]
-    panda_hand_idx = 8
+    panda_hand_idx = robot_cfg.body_ids[0]
     gripper_pos = robot.data.body_state_w[:, panda_hand_idx, :3]  # type: ignore
 
     # TODO: Only compute box distance in X and Y, compare Z to height above table/robot base
