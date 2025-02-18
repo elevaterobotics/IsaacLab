@@ -459,6 +459,6 @@ class DualPickEnvCfg(ManagerBasedRLEnvCfg):
         super().__post_init__()
         self.decimation = 2
         self.sim.render_interval = self.decimation
-        self.episode_length_s = 12.0
+        self.episode_length_s = 6.0
         self.viewer.eye = (3.5, 3.5, 3.5)
         self.sim.dt = 1.0 / 60.0
