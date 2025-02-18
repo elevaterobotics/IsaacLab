@@ -44,7 +44,7 @@ import isaaclab_tasks.manager_based.manipulation.dual_pick.mdp as mdp
 #   [X] > max height penalty: lower picks, but not stable yet, longer training
 #   [X] low velocity reward: best performance ever, long training still
 #   [X] Network size: layers: [256, 128, 64]: faster convergence, better grasp
-#   [ ] Randomized box positions
+#   [O] Randomized box positions: never learned to pick
 #   [ ] shortened episode length
 #   [ ] Symmetric grip reward
 #   [ ] IK vs joint control
@@ -324,12 +324,12 @@ class EventCfg:
         mode="reset",
         params={
             "pose_range": {
-                "x": (0.0, 0.0),  # Fixed x position
-                "y": (0.0, 0.0),  # Fixed y position
+                "x": (-0.15, 0.15),  # Fixed x position
+                "y": (-0.15, 0.15),  # Fixed y position
                 "z": (0.0, 0.0),  # Fixed z position
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
-                "yaw": (0.0, 0.0),
+                "yaw": (-0.8, 0.8),
             },
             "velocity_range": {},  # Empty dict means zero velocities
             "asset_cfg": SceneEntityCfg("target_box"),
